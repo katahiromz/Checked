@@ -129,6 +129,20 @@ struct CheckedArray
     }
 };
 
+template <typename T_ITEM, size_t t_count>
+CheckedArray<T_ITEM, t_count>&
+RawArrayToCheckedArrayRef(T_ITEM (&array)[t_count])
+{
+    return reinterpret_cast<CheckedArray<T_ITEM, t_count>&>(array);
+}
+
+template <typename T_ITEM, size_t t_count>
+const CheckedArray<T_ITEM, t_count>&
+RawArrayToCheckedArrayRef(const T_ITEM (&array)[t_count])
+{
+    return reinterpret_cast<const CheckedArray<T_ITEM, t_count>&>(array);
+}
+
 struct CheckedAllocFree
 {
     void *checked_malloc(size_t cbSize)

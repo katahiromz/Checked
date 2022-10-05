@@ -17,7 +17,7 @@ int main(void)
     printf("0x%X\n", array2[5]);
 
     int array3[] = { 2, 3, 4 };
-    CheckedArray<int, 3> array4(array3);
+    auto& array4 = RawArrayToCheckedArrayRef(array3);
     array4[0] = array4[2];
     printf("0x%X\n", array4[0]);
 
