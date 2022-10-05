@@ -12,7 +12,7 @@
 #endif
 
 #ifndef CHECKED_ASSERT
-    #ifdef CHECKED_NEEDS_SPEED
+    #ifdef CHECKED_OPTIMAL
         #define CHECKED_ASSERT(x) /*empty*/
     #else
         #ifndef ASSERT
@@ -32,7 +32,7 @@ struct CheckedArray
 
     CheckedArray()
     {
-#ifndef CHECKED_NEEDS_SPEED
+#ifndef CHECKED_OPTIMAL
         memset(m_items, CHECKED_UNINIT_BYTE, t_count * sizeof(T_ITEM));
 #endif
     }
@@ -61,7 +61,7 @@ struct CheckedArray
 
     ~CheckedArray()
     {
-#ifndef CHECKED_NEEDS_SPEED
+#ifndef CHECKED_OPTIMAL
         memset(m_items, CHECKED_FREED_BYTE, t_count * sizeof(T_ITEM));
 #endif
     }
@@ -291,7 +291,7 @@ struct CheckedVector : T_ALLOC_FREE
 
         if (cNew < m_count)
         {
-#ifndef CHECKED_NEEDS_SPEED
+#ifndef CHECKED_OPTIMAL
             size_t offset = cNew * sizeof(T_ITEM);
             size_t amount = (m_count - cNew) * sizeof(T_ITEM);
             memset(((unsigned char*)m_items) + offset, CHECKED_FREED_BYTE, amount);
@@ -307,7 +307,7 @@ struct CheckedVector : T_ALLOC_FREE
             CHECKED_ASSERT(0);
             return false;
         }
-#ifndef CHECKED_NEEDS_SPEED
+#ifndef CHECKED_OPTIMAL
         memset(pNewItems, CHECKED_UNINIT_BYTE, cbNew);
 #endif
 
@@ -329,7 +329,7 @@ struct CheckedVector : T_ALLOC_FREE
         CHECKED_ASSERT(m_items != CHECKED_UNINIT_POINTER); // uninitialized pointer?
         CHECKED_ASSERT(m_items != CHECKED_FREED_POINTER); // freed pointer?
 
-#ifndef CHECKED_NEEDS_SPEED
+#ifndef CHECKED_OPTIMAL
         DoubleFreeCheck(m_items, m_count);
         memset(m_items, CHECKED_FREED_BYTE, m_count * sizeof(T_ITEM));
 #endif
