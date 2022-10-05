@@ -307,14 +307,22 @@ struct CheckedVector : T_ALLOC_FREE
             CHECKED_ASSERT(0);
             return false;
         }
+
 #ifndef CHECKED_OPTIMAL
-        memset(pNewItems, CHECKED_UNINIT_BYTE, cbNew);
+        {
+            size_t offset = m_count * sizeof(T_ITEM);
+            size_t amount = (cNew - m_count) * sizeof(T_ITEM);
+            memset((unsigned char*)pNewItems + offset, CHECKED_UNINIT_BYTE, amount);
+            memcpy(pNewItems, m_items, offset);
+        }
+#else
+        memcpy(pNewItems, m_items, m_count * sizeof(T_ITEM));
 #endif
 
-        memcpy(pNewItems, m_items, m_count * sizeof(T_ITEM));
-
-        m_count = cNew;
+        T_ITEM *pOldItems = m_items;
         m_items = pNewItems;
+        T_ALLOC_FREE::checked_free(pOldItems);
+        m_count = cNew;
         return true;
     }
 
