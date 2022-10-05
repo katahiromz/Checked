@@ -131,9 +131,9 @@ struct CheckedArray
 
 struct CheckedAllocFree
 {
-    void *checked_malloc(size_t cb)
+    void *checked_malloc(size_t cbSize)
     {
-        return malloc(cb);
+        return malloc(cbSize);
     }
 
     void checked_free(void *ptr)
@@ -156,13 +156,13 @@ struct CheckedVector : T_ALLOC_FREE
 
     explicit CheckedVector(size_t count) : m_items(NULL), m_count(0)
     {
-        Alloc(count);
+        ReAlloc(count);
     }
 
     template <size_t t_count>
     explicit CheckedVector(const T_ITEM (&array)[t_count]) : m_items(NULL), m_count(0)
     {
-        if (Alloc(t_count))
+        if (ReAlloc(t_count))
             memcpy(m_items, array, t_count * sizeof(T_ITEM));
     }
 
@@ -170,7 +170,7 @@ struct CheckedVector : T_ALLOC_FREE
     {
         CHECKED_ASSERT(items != CHECKED_UNINIT_POINTER);
         CHECKED_ASSERT(items != CHECKED_FREED_POINTER);
-        if (Alloc(count))
+        if (ReAlloc(count))
             memcpy(m_items, items, count * sizeof(T_ITEM));
     }
 
@@ -178,14 +178,14 @@ struct CheckedVector : T_ALLOC_FREE
     {
         CHECKED_ASSERT(array.m_items != CHECKED_UNINIT_POINTER);
         CHECKED_ASSERT(array.m_items != CHECKED_FREED_POINTER);
-        if (Alloc(array.m_count))
+        if (ReAlloc(array.m_count))
             memcpy(m_items, array.m_items, array.m_count * sizeof(T_ITEM));
     }
 
     template <size_t t_count>
     T_SELF& operator=(const T_ITEM (&array)[t_count])
     {
-        if (Alloc(t_count))
+        if (ReAlloc(t_count))
             memcpy(m_items, array, t_count * sizeof(T_ITEM));
         return *this;
     }
@@ -196,7 +196,7 @@ struct CheckedVector : T_ALLOC_FREE
         CHECKED_ASSERT(array.m_items != CHECKED_FREED_POINTER);
         if (this != &array)
         {
-            if (Alloc(array.m_count))
+            if (ReAlloc(array.m_count))
                 memcpy(m_items, array.m_items, array.m_count * sizeof(T_ITEM));
         }
         return *this;
@@ -261,42 +261,6 @@ struct CheckedVector : T_ALLOC_FREE
         return m_items[index];
     }
 
-    bool Alloc(size_t cNew)
-    {
-        Free();
-
-        if (cNew == 0)
-            return true;
-
-        size_t cbNew = cNew * sizeof(T_ITEM);
-        T_ITEM* items = (T_ITEM*)T_ALLOC_FREE::checked_malloc(cbNew);
-        if (items == NULL)
-        {
-            CHECKED_ASSERT(0);
-            return false;
-        }
-
-        PostAlloc(items, cNew);
-
-        m_count = cNew;
-        m_items = items;
-        return true;
-    }
-
-    void Free()
-    {
-        if (m_items == NULL)
-            return;
-
-        PreFree(m_items, m_count);
-
-        m_count = 0;
-
-        T_ITEM* old_items = m_items;
-        m_items = NULL;
-        T_ALLOC_FREE::checked_free(old_items);
-    }
-
     bool ReAlloc(size_t cNew)
     {
         CHECKED_ASSERT(m_items != CHECKED_UNINIT_POINTER);
@@ -318,31 +282,63 @@ struct CheckedVector : T_ALLOC_FREE
             size_t amount = (m_count - cNew) * sizeof(T_ITEM);
             memset(((unsigned char*)m_items) + offset, CHECKED_FREED_BYTE, amount);
 #endif
+            m_count = cNew;
             return true;
         }
 
         size_t cbNew = cNew * sizeof(T_ITEM);
-        T_ITEM* new_items = (T_ITEM*)T_ALLOC_FREE::checked_malloc(cbNew);
-        if (new_items == NULL)
+        T_ITEM* pNewItems = (T_ITEM*)T_ALLOC_FREE::checked_malloc(cbNew);
+        if (pNewItems == NULL)
         {
-            CHECKED_ASSERT(false);
+            CHECKED_ASSERT(0);
             return false;
         }
-
 #ifndef CHECKED_NEEDS_SPEED
-        memset(new_items, CHECKED_UNINIT_BYTE, cNew * sizeof(T_ITEM));
+        memset(pNewItems, CHECKED_UNINIT_BYTE, cbNew);
 #endif
 
-        memcpy(new_items, m_items, m_count * sizeof(T_ITEM));
-
-        PreFree(m_items, m_count);
-
-        T_ITEM* old_items = m_items;
-        m_items = new_items;
-        T_ALLOC_FREE::checked_free(old_items);
+        memcpy(pNewItems, m_items, m_count * sizeof(T_ITEM));
 
         m_count = cNew;
+        m_items = pNewItems;
         return true;
+    }
+
+    void Free()
+    {
+        if (m_items == NULL)
+        {
+            m_count = 0;
+            return;
+        }
+
+        CHECKED_ASSERT(m_items != CHECKED_UNINIT_POINTER); // uninitialized pointer?
+        CHECKED_ASSERT(m_items != CHECKED_FREED_POINTER); // freed pointer?
+
+#ifndef CHECKED_NEEDS_SPEED
+        DoubleFreeCheck(m_items, m_count);
+        memset(m_items, CHECKED_FREED_BYTE, m_count * sizeof(T_ITEM));
+#endif
+
+        m_count = 0;
+
+        T_ITEM* pOldItems = m_items;
+        m_items = NULL;
+        T_ALLOC_FREE::checked_free(pOldItems);
+    }
+
+    void DoubleFreeCheck(T_ITEM *items, size_t count)
+    {
+        unsigned char* pb = (unsigned char*)items;
+        for (size_t ib = 0; ib < count * sizeof(T_ITEM); ++ib)
+        {
+            if (pb[ib] != CHECKED_FREED_BYTE)
+            {
+                pb = NULL;
+                break;
+            }
+        }
+        CHECKED_ASSERT(pb == NULL);
     }
 
     void Attach(T_ITEM* items, size_t count)
@@ -369,46 +365,15 @@ struct CheckedVector : T_ALLOC_FREE
     {
         return m_items != items;
     }
-
-    void PostAlloc(T_ITEM* items, size_t count)
-    {
-#ifndef CHECKED_NEEDS_SPEED
-        memset(items, CHECKED_UNINIT_BYTE, count * sizeof(T_ITEM));
-#endif
-    }
-
-    void PreFree(T_ITEM* items, size_t count)
-    {
-        if (items == NULL)
-            return;
-
-        CHECKED_ASSERT(items != CHECKED_UNINIT_POINTER); // uninitialized pointer?
-        CHECKED_ASSERT(items != CHECKED_FREED_POINTER); // freed pointer?
-
-#ifndef CHECKED_NEEDS_SPEED
-        unsigned char* p = (unsigned char*)items;
-        for (size_t i = 0; i < count * sizeof(T_ITEM); ++i)
-        {
-            if (p[i] != CHECKED_FREED_BYTE)
-            {
-                p = NULL;
-                break;
-            }
-        }
-        CHECKED_ASSERT(p == NULL); // double free?
-
-        memset(items, CHECKED_FREED_BYTE, count * sizeof(T_ITEM));
-#endif
-    }
 };
 
 #ifdef __REACTOS__
-template <int t_nPoolType, unsigned long t_nTag>
+template <POOL_TYPE t_nPoolType, ULONG t_nTag>
 struct CheckedExPoolAllocFree
 {
-    void *checked_malloc(size_t count)
+    void *checked_malloc(size_t cbSize)
     {
-        return ::ExAllocatePoolWithTag(t_nPoolType, count, t_nTag);
+        return ::ExAllocatePoolWithTag(t_nPoolType, cbSize, t_nTag);
     }
 
     void checked_free(void *ptr)
@@ -417,7 +382,7 @@ struct CheckedExPoolAllocFree
     }
 };
 
-template <typename T_ITEM, int t_nPoolType, unsigned long t_nTag>
+template <typename T_ITEM, POOL_TYPE t_nPoolType, ULONG t_nTag>
 struct CheckedExPoolVector : CheckedVector<T_ITEM, CheckedExPoolAllocFree<t_nPoolType, t_nTag> >
 {
     typedef CheckedVector<T_ITEM, CheckedExPoolAllocFree<t_nPoolType, t_nTag> > T_SUPER;
