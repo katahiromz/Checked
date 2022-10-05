@@ -127,6 +127,26 @@ struct CheckedArray
     {
         return m_items != items;
     }
+
+    T_ITEM* begin()
+    {
+        return m_items;
+    }
+
+    const T_ITEM* begin() const
+    {
+        return m_items;
+    }
+
+    T_ITEM* end()
+    {
+        return &m_items[t_count];
+    }
+
+    const T_ITEM* end() const
+    {
+        return &m_items[t_count];
+    }
 };
 
 template <typename T_ITEM, size_t t_count>
@@ -291,12 +311,13 @@ struct CheckedVector : T_ALLOC_FREE
 
         if (cNew < m_count)
         {
+            size_t count = m_count;
+            m_count = cNew;
 #ifndef CHECKED_OPTIMAL
             size_t offset = cNew * sizeof(T_ITEM);
-            size_t amount = (m_count - cNew) * sizeof(T_ITEM);
+            size_t amount = (count - cNew) * sizeof(T_ITEM);
             memset(((unsigned char*)m_items) + offset, CHECKED_FREED_BYTE, amount);
 #endif
-            m_count = cNew;
             return true;
         }
 
@@ -343,7 +364,6 @@ struct CheckedVector : T_ALLOC_FREE
 #endif
 
         m_count = 0;
-
         T_ITEM* pOldItems = m_items;
         m_items = NULL;
         T_ALLOC_FREE::checked_free(pOldItems);
@@ -386,6 +406,26 @@ struct CheckedVector : T_ALLOC_FREE
     bool operator!=(const T_ITEM* items) const
     {
         return m_items != items;
+    }
+
+    T_ITEM* begin()
+    {
+        return m_items;
+    }
+
+    const T_ITEM* begin() const
+    {
+        return m_items;
+    }
+
+    T_ITEM* end()
+    {
+        return &m_items[m_count];
+    }
+
+    const T_ITEM* end() const
+    {
+        return &m_items[m_count];
     }
 };
 
